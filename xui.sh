@@ -115,12 +115,6 @@ install_x-ui() {
     tar zxvf x-ui-linux-${arch}.tar.gz
     rm x-ui-linux-${arch}.tar.gz -f
     cd x-ui
-    
-    # 设置默认用户名、密码和端口
-    sed -i "s/admin:/root:/g" /usr/local/x-ui/bin/config.json
-    sed -i "s/54321/888/g" /usr/local/x-ui/bin/config.json
-    sed -i "s/\"admin\"/\"888\"/g" /usr/local/x-ui/bin/config.json
-    
     chmod +x x-ui bin/xray-linux-${arch}
     cp -f x-ui.service /etc/systemd/system/
     wget --no-check-certificate -O /usr/bin/x-ui https://raw.githubusercontent.com/vaxilu/x-ui/main/x-ui.sh
@@ -132,9 +126,9 @@ install_x-ui() {
     systemctl start x-ui
     echo -e "${green}x-ui v${last_version}${plain} 安装完成，面板已启动"
     echo -e ""
-    echo -e "默认网页端口: ${green}888${plain}"
-    echo -e "默认用户名: ${green}root${plain}"
-    echo -e "默认密码: ${green}888${plain}"
+    echo -e "默认网页端口: ${green}54321${plain}"
+    echo -e "默认用户名: ${green}admin${plain}"
+    echo -e "默认密码: ${green}admin${plain}"
     echo -e ""
     echo -e "请及时登录面板修改账号密码和端口，并确保端口已放行"
     echo -e ""
