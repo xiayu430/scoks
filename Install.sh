@@ -91,12 +91,11 @@ EOF
     
     # 仅显示公网IP, 端口, 用户名, 密码
     clear  # 清空当前页面
-    echo -e "${GREEN}代理服务器搭建完成！${NC}"
-    echo -e "${BLUE}公网IP: ${PUBLIC_IP}${NC}"
-    echo -e "${BLUE}端口: ${PORT}${NC}"
-    echo -e "${BLUE}用户名: ${USER}${NC}"
-    echo -e "${BLUE}密码: ${PASSWD}${NC}"
-    echo -e "${BLUE}链接：socks5://${USER}:${PASSWD}@${PUBLIC_IP}:${PORT}${NC}"
+    echo -e "代理服务器搭建完成！"
+    echo -e "公网IP: ${PUBLIC_IP}"
+    echo -e "端口: ${PORT}"
+    echo -e "用户名: ${USER}"
+    echo -e "密码: ${PASSWD}"
 }
 
 # 自动执行Socks5代理搭建
