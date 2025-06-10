@@ -46,6 +46,7 @@ else
 fi
 
 # sk5 安装与设置
+wget -O /usr/local/bin/sk5 https://github.com/yanpeng997995/prxoy/raw/main/sk5
 chmod +x /usr/local/bin/sk5
 cat <<EOF > /etc/systemd/system/sk5.service
 [Unit]
