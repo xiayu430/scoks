@@ -22,7 +22,7 @@ download_sk5() {
     # 尝试多个镜像源
     local mirrors=(
         "https://github.com/yanpeng997995/prxoy/raw/main/sk5"
-        "https://cdn.jsdelivr.net/gh/yanpeng997995/prxoy@main/sk5"
+        "https://gitcode.com/2401_89691644/socks5/blob/main/sk5"
         "https://raw.githubusercontent.com/yanpeng997995/prxoy/main/sk5"
     )
     
