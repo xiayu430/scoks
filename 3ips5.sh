@@ -740,6 +740,9 @@ test_proxies() {
     declare -a export_ips
     unique_ips=()
     
+    # 创建临时文件存储测试结果
+    tmp_file=$(mktemp)
+    
     while read -r line; do
         arr=($line)
         ip=${arr[0]}
@@ -766,29 +769,40 @@ test_proxies() {
         else
             echo "成功! 出口IP: $export_ip ✅"
             export_ips+=("$export_ip")
+            
+            # 存储可用的代理连接信息
+            echo "$export_ip:$port:$user:$pass" >> $tmp_file
+            
+            # 记录唯一出口IP
             if [[ ! " ${unique_ips[@]} " =~ " ${export_ip} " ]]; then
                 unique_ips+=("$export_ip")
             fi
         fi
     done < $CONFIG_FILE
     
-    # 显示出口IP统计
-    echo
-    echo "IP链接复制:"
-    echo "---------------------------------------"
-    for ip in "${unique_ips[@]}"; do
-        count=0
-        for eip in "${export_ips[@]}"; do
-            if [ "$eip" == "$ip" ]; then
-                ((count++))
-            fi
-        done
-        echo "$ip:$port:$user:$pass"
-    done
+    # 显示可用的代理连接信息
+    if [ -s $tmp_file ]; then
+        echo
+        echo "======================================================="
+        echo "          可用代理连接信息 (可直接复制使用)             "
+        echo "======================================================="
+        echo "格式: 公网IP:端口:用户名:密码"
+        echo "---------------------------------------"
+        cat $tmp_file
+        echo "---------------------------------------"
+        echo "总可用代理数: $(wc -l < $tmp_file)"
+        echo "独立出口IP数: ${#unique_ips[@]}"
+    else
+        echo
+        echo "警告: 没有可用的代理连接"
+    fi
+    
+    # 清理临时文件
+    rm -f $tmp_file
     
     echo "======================================================="
     read -p "按 Enter 键返回菜单..."
-    main_menu
+    main_menu    
 }
 
 # 主入口
