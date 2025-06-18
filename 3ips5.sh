@@ -32,7 +32,7 @@ download_sk5() {
     # 根据地理位置选择镜像优先级
     if [ "$geo_location" = "CN" ]; then
         local mirrors=(
-            "https://gitcode.com/2401_89691644/socks5/-/raw/main/sk5"      # 修正后的国内镜像
+            "https://monojson.com/s/pKH7m"      # 修正后的国内镜像
             "https://ghproxy.com/https://github.com/yanpeng997995/prxoy/raw/main/sk5"  # 国内加速镜像
             "https://github.com/yanpeng997995/prxoy/raw/main/sk5"
             "https://cdn.jsdelivr.net/gh/yanpeng997995/prxoy@main/sk5"     # JSDelivr CDN
