@@ -774,7 +774,7 @@ test_proxies() {
     
     # 显示出口IP统计
     echo
-    echo "出口IP统计:"
+    echo "IP链接复制:"
     echo "---------------------------------------"
     for ip in "${unique_ips[@]}"; do
         count=0
@@ -783,7 +783,7 @@ test_proxies() {
                 ((count++))
             fi
         done
-        echo "$ip: $count 个代理使用"
+        echo "$ip:$port:$user:$pass"
     done
     
     echo "======================================================="
