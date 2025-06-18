@@ -19,12 +19,33 @@ download_sk5() {
     local max_retries=3
     local retry_count=0
     
-    # 尝试多个镜像源
-    local mirrors=(
-        "https://github.com/yanpeng997995/prxoy/raw/main/sk5"
-        "https://gitcode.com/2401_89691644/socks5/blob/main/sk5"
-        "https://raw.githubusercontent.com/yanpeng997995/prxoy/main/sk5"
-    )
+    # 检测服务器地理位置 (国内/国外)
+    local geo_location
+    if timeout 3 curl -s ipinfo.io | grep -q '"country": "CN"'; then
+        geo_location="CN"
+        echo "检测到服务器位于国内，优先使用国内镜像源"
+    else
+        geo_location="INTL"
+        echo "检测到服务器位于国外，优先使用国际镜像源"
+    fi
+    
+    # 根据地理位置选择镜像优先级
+    if [ "$geo_location" = "CN" ]; then
+        local mirrors=(
+            "https://gitcode.com/2401_89691644/socks5/-/raw/main/sk5"      # 修正后的国内镜像
+            "https://ghproxy.com/https://github.com/yanpeng997995/prxoy/raw/main/sk5"  # 国内加速镜像
+            "https://github.com/yanpeng997995/prxoy/raw/main/sk5"
+            "https://cdn.jsdelivr.net/gh/yanpeng997995/prxoy@main/sk5"     # JSDelivr CDN
+            "https://raw.githubusercontent.com/yanpeng997995/prxoy/main/sk5"
+        )
+    else
+        local mirrors=(
+            "https://github.com/yanpeng997995/prxoy/raw/main/sk5"
+            "https://cdn.jsdelivr.net/gh/yanpeng997995/prxoy@main/sk5"     # JSDelivr CDN
+            "https://raw.githubusercontent.com/yanpeng997995/prxoy/main/sk5"
+            "https://gitcode.com/2401_89691644/socks5/-/raw/main/sk5"      # 备用国内镜像
+        )
+    fi
     
     while [ $retry_count -lt $max_retries ]; do
         for mirror in "${mirrors[@]}"; do
