@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 rm -f $0
 
 # 安装必要工具
@@ -6,17 +6,21 @@ if ! command -v curl &> /dev/null; then
     yum install -y curl >/dev/null 2>&1 || apt-get install -y curl >/dev/null 2>&1
 fi
 
+# 配置文件路径
+CONFIG_FILE="/etc/sk5/sk5_configs.txt"
+
 # 菜单显示函数
 show_menu() {
     clear
     echo "###############################################################"
     echo "#            Socks5 代理管理工具                              #"
-    echo "#                     QQ群技术支持: 609972590                   #"
+    echo "#                     TG技术支持: akanonono                   #"
     echo "###############################################################"
     echo "#  1. 安装 Socks5 代理                                        #"
     echo "#  2. 卸载 Socks5 代理                                        #"
-    echo "#  3. Bug反馈                                                #"
-    echo "#  4. 退出                                                    #"
+    echo "#  3. 查看代理配置信息                                        #"
+    echo "#  4. Bug反馈                                                #"
+    echo "#  5. 退出                                                    #"
     echo "###############################################################"
     echo
 }
@@ -34,6 +38,7 @@ uninstall_sk5() {
     rm -f /usr/local/bin/sk5
     rm -rf /etc/sk5
     rm -f /etc/systemd/system/sk5.service
+    rm -f $CONFIG_FILE
     
     # 重载系统服务
     systemctl daemon-reload >/dev/null 2>&1
@@ -53,6 +58,65 @@ uninstall_sk5() {
     read -p "按回车键返回主菜单..." -r
 }
 
+# 查看代理配置信息函数
+view_configs() {
+    clear
+    echo "###############################################################"
+    echo "#               Socks5 代理配置信息                           #"
+    echo "###############################################################"
+    echo
+    
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo ">>> 未找到代理配置信息!"
+        echo ">>> 请先安装 Socks5 代理服务"
+        echo
+        read -p "按回车键返回主菜单..." -r
+        return
+    fi
+    
+    # 获取公网IP
+    public_ip=$(curl -s ifconfig.me)
+    
+    # 获取本地IP列表
+    local_ips=($(awk '{print $1}' "$CONFIG_FILE" | sort -u))
+    
+    # 显示公网IP
+    echo "公网IP: $public_ip"
+    echo
+    
+    # 显示代理配置
+    echo "代理服务器配置:"
+    echo "---------------------------------------"
+    echo "公网连接信息:"
+    
+    # 显示公网IP的所有代理配置
+    while read -r line; do
+        arr=($line)
+        port=${arr[1]}
+        user=${arr[2]}
+        pass=${arr[3]}
+        echo "  端口: $port  用户名: $user  密码: $pass"
+    done < "$CONFIG_FILE"
+    
+    # 显示本地IP的代理配置
+    echo "---------------------------------------"
+    echo "本地连接信息:"
+    for ip in "${local_ips[@]}"; do
+        echo "服务器IP: $ip"
+        # 显示该IP的所有代理配置
+        awk -v ip="$ip" '$1 == ip {print "  端口: "$2"  用户名: "$3"  密码: "$4}' "$CONFIG_FILE"
+        echo "---------------------------------------"
+    done
+    
+    echo
+    echo "使用说明:"
+    echo "1. 公网连接使用公网IP: $public_ip"
+    echo "2. 本地连接使用服务器内网IP"
+    echo "3. 端口、用户名和密码相同"
+    echo
+    read -p "按回车键返回主菜单..." -r
+}
+
 # Bug反馈函数（HTTP方式）
 bug_feedback() {
     clear
@@ -60,20 +124,36 @@ bug_feedback() {
     echo "#                    Bug 反馈                                 #"
     echo "###############################################################"
     echo
-    read -p "请输入您的问题描述: " feedback
     
-    if [ -z "$feedback" ]; then
-        echo "错误：反馈内容不能为空!"
-        sleep 2
-        return
+    # 启用行编辑功能
+    if [ -n "$BASH_VERSION" ]; then
+        bind 'set enable-bracketed-paste off' 2>/dev/null
+        bind 'set editing-mode vi' 2>/dev/null
     fi
     
-    read -p "请输入您的联系方式: " lxfs    
-    if [ -z "$lxfs" ]; then
-        echo "错误：联系方式不能为空!"
-        sleep 2
-        return
-    fi
+    # 安全读取问题描述
+    while true; do
+        read -e -p "请输入您的问题描述: " feedback
+        if [ -z "$feedback" ]; then
+            echo "错误：反馈内容不能为空!"
+            continue
+        fi
+        # 过滤特殊字符
+        feedback=$(echo "$feedback" | tr -cd '[:print:]\n')
+        break
+    done
+    
+    # 安全读取联系方式
+    while true; do
+        read -e -p "请输入您的联系方式: " lxfs
+        if [ -z "$lxfs" ]; then
+            echo "错误：联系方式不能为空!"
+            continue
+        fi
+        # 过滤特殊字符
+        lxfs=$(echo "$lxfs" | tr -cd '[:print:]\n')
+        break
+    done
 
     # 获取系统信息 - 简化的系统信息
     os_info=""
@@ -89,21 +169,32 @@ bug_feedback() {
     public_ip=$(curl -s ifconfig.me)
     date_info=$(date)
     
-    # 反馈服务器配置（需要替换为实际值）
-    FEEDBACK_SERVER="http://43.163.94.138:8000"  # 修改为实际服务器地址
+    # 反馈服务器配置
+    FEEDBACK_SERVER="http://43.163.94.138:8000"
     API_ENDPOINT="/feedback"
     
     # 准备JSON数据
-    json_data=$(cat <<EOF
+    if command -v jq >/dev/null 2>&1; then
+        json_data=$(jq -n \
+            --arg fb "$feedback" \
+            --arg lf "$lxfs" \
+            --arg os "$os_info" \
+            --arg ip "$public_ip" \
+            --arg ts "$date_info" \
+            '{feedback: $fb, lxfs: $lf, os_info: $os, public_ip: $ip, timestamp: $ts}')
+    else
+        # 手动创建JSON
+        json_data=$(cat <<EOF
 {
-    "feedback": "$feedback",
-    "lxfs": "$lxfs",
+    "feedback": "$(printf '%s' "$feedback" | sed 's/"/\\"/g')",
+    "lxfs": "$(printf '%s' "$lxfs" | sed 's/"/\\"/g')",
     "os_info": "$os_info",
     "public_ip": "$public_ip",
     "timestamp": "$date_info"
 }
 EOF
-    )
+        )
+    fi
     
     # 发送HTTP POST请求
     echo ">>> 正在发送反馈到服务器..."
@@ -119,10 +210,16 @@ EOF
     else
         echo ">>> 错误：无法连接到反馈服务器!"
         echo ">>> 请手动将以下内容发送至 support@example.com:"
-        echo "系统信息: $os_info"
+        echo "操作系统: $os_info"
         echo "公网IP: $public_ip"
         echo "问题描述: $feedback"
         echo "联系方式: $lxfs"
+    fi
+    
+    # 恢复终端设置
+    if [ -n "$BASH_VERSION" ]; then
+        bind 'set enable-bracketed-paste on' 2>/dev/null
+        bind 'set editing-mode emacs' 2>/dev/null
     fi
     
     echo
@@ -217,9 +314,8 @@ EOF
     echo "###############################################################"
     echo
 
-    # 保存配置用于测试
-    config_file="/tmp/sk5_configs.txt"
-    echo -n "" > $config_file
+    # 保存配置用于测试和查看
+    echo -n "" > $CONFIG_FILE
 
     # 配置每个IP
     for ((i = 0; i < ${#ips[@]}; i++)); do
@@ -236,8 +332,8 @@ EOF
             socks_pass="$(gen_random_string 12)"
         fi
 
-        # 保存配置
-        echo "${ips[i]} $socks_port $socks_user $socks_pass" >> $config_file
+        # 保存配置到永久文件
+        echo "${ips[i]} $socks_port $socks_user $socks_pass" >> $CONFIG_FILE
 
         # 写入配置文件
         cat <<EOF >> /etc/sk5/serve.toml
@@ -301,7 +397,7 @@ EOF
         else
             echo "成功 ✅ 出口IP: $export_ip"
         fi
-    done < $config_file
+    done < $CONFIG_FILE
 
     # 安装完成信息
     echo
@@ -311,6 +407,7 @@ EOF
     echo "#        详细说明: socks5 自动安装程序                        #"
     echo "#        遇到问题请使用菜单中的'Bug反馈'功能                  #"
     echo "#        QQ群技术支持: 609972590                             #"
+    echo "#        可在菜单中查看代理配置信息                           #"
     echo "###############################################################"
     echo
     read -p "按回车键返回主菜单..." -r
@@ -319,13 +416,14 @@ EOF
 # 主菜单循环
 while true; do
     show_menu
-    read -p "请输入选项 (1-4): " choice
+    read -p "请输入选项 (1-5): " choice
     
     case $choice in
         1) install_sk5 ;;
         2) uninstall_sk5 ;;
-        3) bug_feedback ;;
-        4) 
+        3) view_configs ;;
+        4) bug_feedback ;;
+        5) 
             clear
             echo "感谢使用，再见!"
             exit 0
