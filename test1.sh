@@ -74,45 +74,28 @@ view_configs() {
         return
     fi
     
-    # 获取公网IP
-    public_ip=$(curl -s ifconfig.me)
-    
-    # 获取本地IP列表
-    local_ips=($(awk '{print $1}' "$CONFIG_FILE" | sort -u))
-    
-    # 显示公网IP
-    echo "公网IP: $public_ip"
-    echo
-    
     # 显示代理配置
     echo "代理服务器配置:"
     echo "---------------------------------------"
-    echo "公网连接信息:"
     
-    # 显示公网IP的所有代理配置
+    # 显示所有代理配置
     while read -r line; do
         arr=($line)
+        local_ip=${arr[0]}
         port=${arr[1]}
         user=${arr[2]}
         pass=${arr[3]}
+        public_ip=${arr[4]}
+        
+        echo "服务器IP: $local_ip (公网出口IP: $public_ip)"
         echo "  端口: $port  用户名: $user  密码: $pass"
-    done < "$CONFIG_FILE"
-    
-    # 显示本地IP的代理配置
-    echo "---------------------------------------"
-    echo "本地连接信息:"
-    for ip in "${local_ips[@]}"; do
-        echo "服务器IP: $ip"
-        # 显示该IP的所有代理配置
-        awk -v ip="$ip" '$1 == ip {print "  端口: "$2"  用户名: "$3"  密码: "$4}' "$CONFIG_FILE"
         echo "---------------------------------------"
-    done
+    done < "$CONFIG_FILE"
     
     echo
     echo "使用说明:"
-    echo "1. 公网连接使用公网IP: $public_ip"
-    echo "2. 本地连接使用服务器内网IP"
-    echo "3. 端口、用户名和密码相同"
+    echo "1. 连接时使用对应的服务器IP和端口"
+    echo "2. 每个IP的出口公网IP可能不同"
     echo
     read -p "按回车键返回主菜单..." -r
 }
@@ -125,12 +108,6 @@ bug_feedback() {
     echo "###############################################################"
     echo
     
-    # 启用行编辑功能
-    if [ -n "$BASH_VERSION" ]; then
-        bind 'set enable-bracketed-paste off' 2>/dev/null
-        bind 'set editing-mode vi' 2>/dev/null
-    fi
-    
     # 安全读取问题描述
     while true; do
         read -e -p "请输入您的问题描述: " feedback
@@ -138,8 +115,6 @@ bug_feedback() {
             echo "错误：反馈内容不能为空!"
             continue
         fi
-        # 过滤特殊字符
-        feedback=$(echo "$feedback" | tr -cd '[:print:]\n')
         break
     done
     
@@ -150,8 +125,6 @@ bug_feedback() {
             echo "错误：联系方式不能为空!"
             continue
         fi
-        # 过滤特殊字符
-        lxfs=$(echo "$lxfs" | tr -cd '[:print:]\n')
         break
     done
 
@@ -186,8 +159,8 @@ bug_feedback() {
         # 手动创建JSON
         json_data=$(cat <<EOF
 {
-    "feedback": "$(printf '%s' "$feedback" | sed 's/"/\\"/g')",
-    "lxfs": "$(printf '%s' "$lxfs" | sed 's/"/\\"/g')",
+    "feedback": "$feedback",
+    "lxfs": "$lxfs",
     "os_info": "$os_info",
     "public_ip": "$public_ip",
     "timestamp": "$date_info"
@@ -216,17 +189,23 @@ EOF
         echo "联系方式: $lxfs"
     fi
     
-    # 恢复终端设置
-    if [ -n "$BASH_VERSION" ]; then
-        bind 'set enable-bracketed-paste on' 2>/dev/null
-        bind 'set editing-mode emacs' 2>/dev/null
-    fi
-    
     echo
     read -p "按回车键返回主菜单..." -r
 }
 
-# 安装函数
+# 获取指定IP的出口公网IP
+get_public_ip_for_interface() {
+    local ip=$1
+    # 使用curl通过指定接口获取出口IP
+    public_ip=$(curl --interface $ip -s ifconfig.me)
+    if [ -z "$public_ip" ] || [[ "$public_ip" == *"error"* ]]; then
+        # 如果失败，使用默认方法获取公网IP
+        public_ip=$(curl -s ifconfig.me)
+    fi
+    echo "$public_ip"
+}
+
+# 安装函数 - 支持多IP服务器并获取每个IP的公网出口
 install_sk5() {
     clear
     echo "###############################################################"
@@ -248,9 +227,15 @@ install_sk5() {
     iptables -X
     iptables-save >/dev/null 2>&1
 
-    # 获取公网IP和本地IP
-    public_ip=$(curl -s ifconfig.me)
+    # 获取本地IP
     ips=( $(hostname -I) )
+    
+    # 显示检测到的IP
+    echo "检测到以下服务器IP地址:"
+    for ((i = 0; i < ${#ips[@]}; i++)); do
+        echo "  $((i+1)). ${ips[i]}"
+    done
+    echo
 
     # 询问用户密码设置方式
     echo
@@ -310,7 +295,7 @@ EOF
     clear
     echo "###############################################################"
     echo "#        Socks5 代理配置信息                                  #"
-    echo "#        公网IP: $public_ip                                  #"
+    echo "#        服务器IP数量: ${#ips[@]}                             #"
     echo "###############################################################"
     echo
 
@@ -320,6 +305,12 @@ EOF
     # 配置每个IP
     for ((i = 0; i < ${#ips[@]}; i++)); do
         socks_port=$((base_port + i))
+        local_ip="${ips[i]}"
+        
+        # 获取该IP的公网出口IP
+        echo ">>> 正在获取 ${local_ip} 的公网出口IP..."
+        public_ip=$(get_public_ip_for_interface $local_ip)
+        echo ">>> 公网出口IP: $public_ip"
 
         # 根据用户选择决定用户名密码生成方式
         if [ "$manual_set" = "y" ] && [ "$same_credentials" = "true" ]; then
@@ -332,20 +323,20 @@ EOF
             socks_pass="$(gen_random_string 12)"
         fi
 
-        # 保存配置到永久文件
-        echo "${ips[i]} $socks_port $socks_user $socks_pass" >> $CONFIG_FILE
+        # 保存配置到永久文件（添加公网出口IP）
+        echo "$local_ip $socks_port $socks_user $socks_pass $public_ip" >> $CONFIG_FILE
 
         # 写入配置文件
         cat <<EOF >> /etc/sk5/serve.toml
 [[inbounds]]
-listen = "${ips[i]}"
+listen = "$local_ip"
 port = $socks_port
 protocol = "socks"
 tag = "$((i+1))"
 [inbounds.settings]
 auth = "password"
 udp = true
-ip = "${ips[i]}"
+ip = "$local_ip"
 [[inbounds.settings.accounts]]
 user = "$socks_user"
 pass = "$socks_pass"
@@ -354,17 +345,18 @@ type = "field"
 inboundTag = "$((i+1))"
 outboundTag = "$((i+1))"
 [[outbounds]]
-sendThrough = "${ips[i]}"
+sendThrough = "$local_ip"
 protocol = "freedom"
 tag = "$((i+1))"
 EOF
 
         # 显示配置
         echo "代理 $((i+1)) 配置:"
-        echo "监听地址: ${ips[i]}"
+        echo "监听地址: $local_ip"
         echo "端口: $socks_port"
         echo "用户名: $socks_user"
         echo "密码: $socks_pass"
+        echo "公网出口IP: $public_ip"
         echo "-----------------------------"
     done
 
@@ -386,6 +378,7 @@ EOF
         port=${arr[1]}
         user=${arr[2]}
         pass=${arr[3]}
+        expected_public_ip=${arr[4]}
 
         echo -n "测试 $ip:$port ... "
 
@@ -395,7 +388,11 @@ EOF
         if [ -z "$export_ip" ]; then
             echo "失败 ❌"
         else
-            echo "成功 ✅ 出口IP: $export_ip"
+            if [ "$export_ip" == "$expected_public_ip" ]; then
+                echo "成功 ✅ 出口IP: $export_ip (匹配)"
+            else
+                echo "成功 ✅ 出口IP: $export_ip (预期: $expected_public_ip)"
+            fi
         fi
     done < $CONFIG_FILE
 
@@ -404,6 +401,8 @@ EOF
     echo "###############################################################"
     echo "#        安装完成!                                           #"
     echo "#        支持系统: CentOS 7+                                  #"
+    echo "#        服务器IP数量: ${#ips[@]}                             #"
+    echo "#        起始端口: $base_port                                 #"
     echo "#        详细说明: socks5 自动安装程序                        #"
     echo "#        遇到问题请使用菜单中的'Bug反馈'功能                  #"
     echo "#        QQ群技术支持: 609972590                             #"
